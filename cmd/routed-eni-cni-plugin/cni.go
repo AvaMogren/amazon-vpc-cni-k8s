@@ -285,11 +285,10 @@ func del(args *skel.CmdArgs, cniTypes typeswrapper.CNITYPES, grpcClient grpcwrap
 			// namespace no longer exists, unless that network namespace is critical for IPAM management
 			log.Infof("Pod %s in namespace %s not found", string(k8sArgs.K8S_POD_NAME), string(k8sArgs.K8S_POD_NAMESPACE))
 			return nil
-		} else {
-			log.Errorf("Error received from DelNetwork grpc call for pod %s namespace %s sandbox %s: %v",
-				string(k8sArgs.K8S_POD_NAME), string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_INFRA_CONTAINER_ID), err)
-			return err
 		}
+		log.Errorf("Error received from DelNetwork grpc call for pod %s namespace %s sandbox %s: %v",
+			string(k8sArgs.K8S_POD_NAME), string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_INFRA_CONTAINER_ID), err)
+		return err
 	}
 
 	if !r.Success {
@@ -298,10 +297,10 @@ func del(args *skel.CmdArgs, cniTypes typeswrapper.CNITYPES, grpcClient grpcwrap
 		return errors.New("del cmd: failed to process delete request")
 	}
 
-	deletedPodIp := net.ParseIP(r.IPv4Addr)
-	if deletedPodIp != nil {
+	deletedPodIP := net.ParseIP(r.IPv4Addr)
+	if deletedPodIP != nil {
 		addr := &net.IPNet{
-			IP:   deletedPodIp,
+			IP:   deletedPodIP,
 			Mask: net.IPv4Mask(255, 255, 255, 255),
 		}
 		err = driverClient.TeardownNS(addr, int(r.DeviceNumber))
