@@ -608,3 +608,16 @@ func TestDisablingENIProvisioning(t *testing.T) {
 	disabled = disablingENIProvisioning()
 	assert.False(t, disabled)
 }
+
+func TestDedicatedENIProvisioning(t *testing.T) {
+	ctrl, _, _, _, _, _ := setup(t)
+	defer ctrl.Finish()
+
+	_ = os.Setenv(envDedicatedENI, "true")
+	disabled := dedicatedENI()
+	assert.True(t, disabled)
+
+	_ = os.Unsetenv(envDedicatedENI)
+	disabled = dedicatedENI()
+	assert.False(t, disabled)
+}

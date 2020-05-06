@@ -112,7 +112,9 @@ const (
 
 	// disableENIProvisioning is used to specify that ENI doesn't need to be synced during initializing a pod.
 	envDisableENIProvisioning = "DISABLE_NETWORK_RESOURCE_PROVISIONING"
-	noDisableENIProvisioning  = false
+
+	// dedicatedENI is used to attach a Trunk ENI to every node. Required in order to give Branch ENIs to pods.
+	envDedicatedENI = "DEDICATED_ENI"
 )
 
 var log = logger.Get()
@@ -191,6 +193,7 @@ type IPAMContext struct {
 	reconcileCooldownCache ReconcileCooldownCache
 	terminating            int32 // Flag to warn that the pod is about to shut down.
 	disableENIProvisioning bool
+	dedicatedENI           bool
 }
 
 // UnmanagedENISet keeps a set of ENI IDs for ENIs tagged with "node.k8s.amazonaws.com/no_manage"
@@ -310,6 +313,7 @@ func New(k8sapiClient k8sapi.K8SAPIs, eniConfig *eniconfig.ENIConfigController) 
 	c.minimumIPTarget = getMinimumIPTarget()
 	c.useCustomNetworking = UseCustomNetworkCfg()
 	c.disableENIProvisioning = disablingENIProvisioning()
+	c.dedicatedENI = dedicatedENI()
 
 	err = c.nodeInit()
 	if err != nil {
@@ -1157,7 +1161,11 @@ func getMinimumIPTarget() int {
 }
 
 func disablingENIProvisioning() bool {
-	return getEnvBoolWithDefault(envDisableENIProvisioning, noDisableENIProvisioning)
+	return getEnvBoolWithDefault(envDisableENIProvisioning, false)
+}
+
+func dedicatedENI() bool {
+	return getEnvBoolWithDefault(envDedicatedENI, false)
 }
 
 // filterUnmanagedENIs filters out ENIs marked with the "node.k8s.amazonaws.com/no_manage" tag
