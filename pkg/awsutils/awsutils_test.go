@@ -398,7 +398,7 @@ func TestDescribeAllENIs(t *testing.T) {
 	for _, tc := range testCases {
 		mockEC2.EXPECT().DescribeNetworkInterfaces(gomock.Any()).Return(result, tc.awsErr)
 		ins := &EC2InstanceMetadataCache{ec2Metadata: mockMetadata, ec2SVC: mockEC2}
-		_, tags, err := ins.DescribeAllENIs()
+		_, tags, _, err := ins.DescribeAllENIs()
 		assert.Equal(t, tc.expErr, err, tc.name)
 		assert.Equal(t, tc.exptags, tags, tc.name)
 	}
@@ -516,7 +516,7 @@ func TestAllocENI(t *testing.T) {
 	mockEC2.EXPECT().ModifyNetworkInterfaceAttribute(gomock.Any()).Return(nil, nil)
 
 	ins := &EC2InstanceMetadataCache{ec2SVC: mockEC2}
-	_, err := ins.AllocENI(false, nil, "")
+	_, err := ins.AllocENI(false, false, nil, "")
 	assert.NoError(t, err)
 }
 
@@ -546,7 +546,7 @@ func TestAllocENINoFreeDevice(t *testing.T) {
 	mockEC2.EXPECT().DeleteNetworkInterface(gomock.Any()).Return(nil, nil)
 
 	ins := &EC2InstanceMetadataCache{ec2SVC: mockEC2}
-	_, err := ins.AllocENI(false, nil, "")
+	_, err := ins.AllocENI(false, false, nil, "")
 	assert.Error(t, err)
 }
 
@@ -580,7 +580,7 @@ func TestAllocENIMaxReached(t *testing.T) {
 	mockEC2.EXPECT().DeleteNetworkInterface(gomock.Any()).Return(nil, nil)
 
 	ins := &EC2InstanceMetadataCache{ec2SVC: mockEC2}
-	_, err := ins.AllocENI(false, nil, "")
+	_, err := ins.AllocENI(false, false, nil, "")
 	assert.Error(t, err)
 }
 

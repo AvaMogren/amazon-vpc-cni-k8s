@@ -111,7 +111,7 @@ var (
 // APIs defines interfaces calls for adding/getting/deleting ENIs/secondary IPs. The APIs are not thread-safe.
 type APIs interface {
 	// AllocENI creates an ENI and attaches it to the instance
-	AllocENI(useCustomCfg bool, sg []*string, subnet string) (eni string, err error)
+	AllocENI(trunk, useCustomCfg bool, sg []*string, subnet string) (eni string, err error)
 
 	// FreeENI detaches ENI interface and deletes it
 	FreeENI(eniName string) error
@@ -123,7 +123,7 @@ type APIs interface {
 	GetIPv4sFromEC2(eniID string) (addrList []*ec2.NetworkInterfacePrivateIpAddress, err error)
 
 	// DescribeAllENIs calls EC2 and returns the ENIMetadata and a tag map for each ENI
-	DescribeAllENIs() ([]ENIMetadata, map[string]TagMap, error)
+	DescribeAllENIs() ([]ENIMetadata, map[string]TagMap, string, error)
 
 	// AllocIPAddress allocates an IP address for an ENI
 	AllocIPAddress(eniID string) error
@@ -586,8 +586,8 @@ func (cache *EC2InstanceMetadataCache) awsGetFreeDeviceNumber() (int, error) {
 
 // AllocENI creates an ENI and attaches it to the instance
 // returns: newly created ENI ID
-func (cache *EC2InstanceMetadataCache) AllocENI(useCustomCfg bool, sg []*string, subnet string) (string, error) {
-	eniID, err := cache.createENI(useCustomCfg, sg, subnet)
+func (cache *EC2InstanceMetadataCache) AllocENI(trunk, useCustomCfg bool, sg []*string, subnet string) (string, error) {
+	eniID, err := cache.createENI(trunk, useCustomCfg, sg, subnet)
 	if err != nil {
 		return "", errors.Wrap(err, "AllocENI: failed to create ENI")
 	}
@@ -655,7 +655,7 @@ func (cache *EC2InstanceMetadataCache) attachENI(eniID string) (string, error) {
 }
 
 // return ENI id, error
-func (cache *EC2InstanceMetadataCache) createENI(useCustomCfg bool, sg []*string, subnet string) (string, error) {
+func (cache *EC2InstanceMetadataCache) createENI(trunk, useCustomCfg bool, sg []*string, subnet string) (string, error) {
 	eniDescription := eniDescriptionPrefix + cache.instanceID
 	input := &ec2.CreateNetworkInterfaceInput{
 		Description: aws.String(eniDescription),
@@ -669,6 +669,11 @@ func (cache *EC2InstanceMetadataCache) createENI(useCustomCfg bool, sg []*string
 		input.SubnetId = aws.String(subnet)
 	} else {
 		log.Info("Using same config as the primary interface for the new ENI")
+	}
+	if trunk {
+		log.Info("Creating a trunk ENI")
+		input.Description = aws.String(eniDescription + "-Trunk-ENI")
+		input.InterfaceType = aws.String("trunk")
 	}
 	var sgs []string
 	for i := range input.Groups {
@@ -939,11 +944,11 @@ func (cache *EC2InstanceMetadataCache) GetIPv4sFromEC2(eniID string) (addrList [
 }
 
 // DescribeAllENIs calls EC2 to refrech the ENIMetadata and tags for all attached ENIs
-func (cache *EC2InstanceMetadataCache) DescribeAllENIs() ([]ENIMetadata, map[string]TagMap, error) {
+func (cache *EC2InstanceMetadataCache) DescribeAllENIs() ([]ENIMetadata, map[string]TagMap, string, error) {
 	// Fetch all local ENI info from metadata
 	allENIs, err := cache.GetAttachedENIs()
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "DescribeAllENIs: failed to get local ENI metadata")
+		return nil, nil, "", errors.Wrap(err, "DescribeAllENIs: failed to get local ENI metadata")
 	}
 
 	eniMap := make(map[string]ENIMetadata, len(allENIs))
@@ -960,19 +965,25 @@ func (cache *EC2InstanceMetadataCache) DescribeAllENIs() ([]ENIMetadata, map[str
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			if aerr.Code() == "InvalidNetworkInterfaceID.NotFound" {
-				return nil, nil, ErrENINotFound
+				return nil, nil, "", ErrENINotFound
 			}
 		}
 		awsAPIErrInc("DescribeNetworkInterfaces", err)
 		log.Errorf("Failed to call ec2:DescribeNetworkInterfaces for %v: %v", eniIDs, err)
-		return nil, nil, errors.Wrap(err, "failed to describe network interfaces")
+		return nil, nil, "", errors.Wrap(err, "failed to describe network interfaces")
 	}
 
 	// Collect ENI response into ENI metadata and tags.
 	tagMap := make(map[string]TagMap, len(ec2Response.NetworkInterfaces))
+	trunkENI := ""
 	for _, ec2res := range ec2Response.NetworkInterfaces {
 		eniID := aws.StringValue(ec2res.NetworkInterfaceId)
 		eniMetadata := eniMap[eniID]
+		interfaceType := aws.StringValue(ec2res.InterfaceType)
+		log.Infof("XXXXXXXXXXXX Got type %s", interfaceType)
+		if interfaceType == "vlan" {
+			trunkENI = eniID
+		}
 		// Check IPv4 addresses
 		logOutOfSyncState(eniID, eniMetadata.IPv4Addresses, ec2res.PrivateIpAddresses)
 		tags := make(map[string]string, len(ec2res.TagSet))
@@ -987,7 +998,7 @@ func (cache *EC2InstanceMetadataCache) DescribeAllENIs() ([]ENIMetadata, map[str
 			tagMap[eniMetadata.ENIID] = tags
 		}
 	}
-	return allENIs, tagMap, nil
+	return allENIs, tagMap, trunkENI, nil
 }
 
 // logOutOfSyncState compares the IP and metadata returned by IMDS and the EC2 API DescribeNetworkInterfaces calls

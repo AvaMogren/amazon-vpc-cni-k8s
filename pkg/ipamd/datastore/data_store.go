@@ -97,9 +97,11 @@ var (
 type ENIIPPool struct {
 	createTime         time.Time
 	lastUnassignedTime time.Time
-	// IsPrimary indicates whether ENI is a primary ENI
+	// IsPrimary indicates whether this ENI is the Primary ENI
 	IsPrimary bool
 	ID        string
+	// IsTrunk indicates whether this ENI is used to provide pods with dedicated ENIs
+	IsTrunk bool
 	// DeviceNumber is the device number of ENI (0 means the primary ENI)
 	DeviceNumber int
 	// AssignedIPv4Addresses is the number of IP addresses already been assigned
@@ -176,7 +178,7 @@ func NewDataStore(log logger.Logger) *DataStore {
 }
 
 // AddENI add ENI to data store
-func (ds *DataStore) AddENI(eniID string, deviceNumber int, isPrimary bool) error {
+func (ds *DataStore) AddENI(eniID string, deviceNumber int, isPrimary, isTrunk bool) error {
 	ds.lock.Lock()
 	defer ds.lock.Unlock()
 
@@ -189,6 +191,7 @@ func (ds *DataStore) AddENI(eniID string, deviceNumber int, isPrimary bool) erro
 	ds.eniIPPools[eniID] = &ENIIPPool{
 		createTime:    time.Now(),
 		IsPrimary:     isPrimary,
+		IsTrunk: 	   isTrunk,
 		ID:            eniID,
 		DeviceNumber:  deviceNumber,
 		IPv4Addresses: make(map[string]*AddressInfo)}
@@ -345,6 +348,17 @@ func (ds *DataStore) GetStats() (int, int) {
 	return ds.total, ds.assigned
 }
 
+func (ds *DataStore) GetDedicatedENI() string {
+	ds.lock.RLock()
+	ds.lock.Unlock()
+	for _, eni := range ds.eniIPPools {
+		if eni.IsTrunk {
+			return eni.ID
+		}
+	}
+	return ""
+}
+
 // IsRequiredForWarmIPTarget determines if this ENI has warm IPs that are required to fulfill whatever WARM_IP_TARGET is
 // set to.
 func (ds *DataStore) isRequiredForWarmIPTarget(warmIPTarget int, eni *ENIIPPool) bool {
@@ -398,6 +412,11 @@ func (ds *DataStore) getDeletableENI(warmIPTarget int, minimumIPTarget int) *ENI
 
 		if minimumIPTarget != 0 && ds.isRequiredForMinimumIPTarget(minimumIPTarget, eni) {
 			ds.log.Debugf("ENI %s cannot be deleted because it is required for MINIMUM_IP_TARGET: %d", eni.ID, minimumIPTarget)
+			continue
+		}
+
+		if eni.IsTrunk {
+			ds.log.Debugf("ENI %s cannot be deleted because it is a trunk ENI", eni.ID)
 			continue
 		}
 

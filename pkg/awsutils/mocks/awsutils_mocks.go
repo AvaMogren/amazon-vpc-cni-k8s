@@ -19,11 +19,10 @@
 package mock_awsutils
 
 import (
-	reflect "reflect"
-
 	awsutils "github.com/aws/amazon-vpc-cni-k8s/pkg/awsutils"
 	ec2 "github.com/aws/aws-sdk-go/service/ec2"
 	gomock "github.com/golang/mock/gomock"
+	reflect "reflect"
 )
 
 // MockAPIs is a mock of APIs interface
@@ -50,18 +49,18 @@ func (m *MockAPIs) EXPECT() *MockAPIsMockRecorder {
 }
 
 // AllocENI mocks base method
-func (m *MockAPIs) AllocENI(arg0 bool, arg1 []*string, arg2 string) (string, error) {
+func (m *MockAPIs) AllocENI(arg0, arg1 bool, arg2 []*string, arg3 string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AllocENI", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "AllocENI", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AllocENI indicates an expected call of AllocENI
-func (mr *MockAPIsMockRecorder) AllocENI(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockAPIsMockRecorder) AllocENI(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllocENI", reflect.TypeOf((*MockAPIs)(nil).AllocENI), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllocENI", reflect.TypeOf((*MockAPIs)(nil).AllocENI), arg0, arg1, arg2, arg3)
 }
 
 // AllocIPAddress mocks base method
@@ -107,13 +106,14 @@ func (mr *MockAPIsMockRecorder) DeallocIPAddresses(arg0, arg1 interface{}) *gomo
 }
 
 // DescribeAllENIs mocks base method
-func (m *MockAPIs) DescribeAllENIs() ([]awsutils.ENIMetadata, map[string]awsutils.TagMap, error) {
+func (m *MockAPIs) DescribeAllENIs() ([]awsutils.ENIMetadata, map[string]awsutils.TagMap, string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DescribeAllENIs")
 	ret0, _ := ret[0].([]awsutils.ENIMetadata)
 	ret1, _ := ret[1].(map[string]awsutils.TagMap)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret2, _ := ret[2].(string)
+	ret3, _ := ret[3].(error)
+	return ret0, ret1, ret2, ret3
 }
 
 // DescribeAllENIs indicates an expected call of DescribeAllENIs

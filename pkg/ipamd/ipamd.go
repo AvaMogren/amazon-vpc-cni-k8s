@@ -329,7 +329,7 @@ func (c *IPAMContext) nodeInit() error {
 
 	log.Debugf("Start node init")
 
-	eniMetadata, tagMap, err := c.awsClient.DescribeAllENIs()
+	eniMetadata, tagMap, trunkENI, err := c.awsClient.DescribeAllENIs()
 	if err != nil {
 		return errors.New("ipamd init: failed to retrieve attached ENIs info")
 	} else {
@@ -373,7 +373,7 @@ func (c *IPAMContext) nodeInit() error {
 		retry := 0
 		for {
 			retry++
-			if err = c.setupENI(eni.ENIID, eni); err == nil {
+			if err = c.setupENI(eni.ENIID, eni, trunkENI); err == nil {
 				log.Infof("ENI %s set up.", eni.ENIID)
 				break
 			}
@@ -433,6 +433,15 @@ func (c *IPAMContext) nodeInit() error {
 			log.Errorf("UpdateRuleListBySrc in nodeInit() failed for IP %s: %v", ip.IP, err)
 		}
 	}
+	// Check for dedicated ENI support
+	if c.dedicatedENI && c.dataStore.GetDedicatedENI() == "" {
+		// We need to attach a trunk ENI one!
+		err := c.tryAllocateENI(true)
+		if err != nil {
+			log.Errorf("Failed to attach trunk ENI: %v", err)
+		}
+	}
+
 	// For a new node, attach IPs
 	increasedPool, err := c.tryAssignIPs()
 	if err == nil && increasedPool {
@@ -686,7 +695,7 @@ func (c *IPAMContext) increaseIPPool() {
 	} else {
 		// If we did not add an IP, try to add an ENI instead.
 		if c.dataStore.GetENIs() < (c.maxENI - c.unmanagedENI) {
-			if err = c.tryAllocateENI(); err == nil {
+			if err = c.tryAllocateENI(false); err == nil {
 				c.updateLastNodeIPPoolAction()
 			}
 		} else {
@@ -702,7 +711,7 @@ func (c *IPAMContext) updateLastNodeIPPoolAction() {
 	logPoolStats(total, used, c.maxIPsPerENI)
 }
 
-func (c *IPAMContext) tryAllocateENI() error {
+func (c *IPAMContext) tryAllocateENI(trunk bool) error {
 	var securityGroups []*string
 	var subnet string
 
@@ -722,7 +731,7 @@ func (c *IPAMContext) tryAllocateENI() error {
 		subnet = eniCfg.Subnet
 	}
 
-	eni, err := c.awsClient.AllocENI(c.useCustomNetworking, securityGroups, subnet)
+	eni, err := c.awsClient.AllocENI(trunk, c.useCustomNetworking, securityGroups, subnet)
 	if err != nil {
 		log.Errorf("Failed to increase pool size due to not able to allocate ENI %v", err)
 		ipamdErrInc("increaseIPPoolAllocENI")
@@ -748,8 +757,11 @@ func (c *IPAMContext) tryAllocateENI() error {
 		log.Errorf("Failed to increase pool size: Unable to discover attached ENI from metadata service %v", err)
 		return err
 	}
-
-	err = c.setupENI(eni, eniMetadata)
+	trunkENI := ""
+	if trunk {
+		trunkENI = eni
+	}
+	err = c.setupENI(eni, eniMetadata, trunkENI)
 	if err != nil {
 		ipamdErrInc("increaseIPPoolsetupENIFailed")
 		log.Errorf("Failed to increase pool size: %v", err)
@@ -797,9 +809,9 @@ func (c *IPAMContext) tryAssignIPs() (increasedPool bool, err error) {
 // 1) add ENI to datastore
 // 2) set up linux ENI related networking stack.
 // 3) add all ENI's secondary IP addresses to datastore
-func (c *IPAMContext) setupENI(eni string, eniMetadata awsutils.ENIMetadata) error {
+func (c *IPAMContext) setupENI(eni string, eniMetadata awsutils.ENIMetadata, trunkENI string) error {
 	// Add the ENI to the datastore
-	err := c.dataStore.AddENI(eni, eniMetadata.DeviceNumber, eni == c.awsClient.GetPrimaryENI())
+	err := c.dataStore.AddENI(eni, eniMetadata.DeviceNumber, eni == c.awsClient.GetPrimaryENI(), eni == trunkENI)
 	if err != nil && err.Error() != datastore.DuplicatedENIError {
 		return errors.Wrapf(err, "failed to add ENI %s to data store", eni)
 	}
@@ -979,21 +991,28 @@ func (c *IPAMContext) nodeIPPoolReconcile(interval time.Duration) {
 	}
 	attachedENIs := c.filterUnmanagedENIs(allENIs)
 	currentENIIPPools := c.dataStore.GetENIInfos().ENIIPPools
+	trunkENI := ""
 
-	// Check if a new ENI was added, if so we need to update the tags
+	// Check if a new ENI was added, if so we need to update the tags. Also, find the trunk ENI if we have one.
 	needToUpdateTags := false
 	for _, attachedENI := range attachedENIs {
-		if _, ok := currentENIIPPools[attachedENI.ENIID]; !ok {
+		if eniPool, ok := currentENIIPPools[attachedENI.ENIID]; !ok {
 			needToUpdateTags = true
-			break
+		} else {
+			if eniPool.IsTrunk {
+				trunkENI = attachedENI.ENIID
+			}
 		}
 	}
 	if needToUpdateTags {
 		log.Debugf("A new ENI added but not by ipamd, updating tags")
-		allENIs, tagMap, err := c.awsClient.DescribeAllENIs()
+		allENIs, tagMap, trunk, err := c.awsClient.DescribeAllENIs()
 		if err != nil {
 			log.Warnf("Failed to call EC2 to describe ENIs, aborting reconcile: %v", err)
 			return
+		}
+		if trunkENI == "" {
+			trunkENI = trunk
 		}
 		c.setUnmanagedENIs(tagMap)
 		attachedENIs = c.filterUnmanagedENIs(allENIs)
@@ -1014,7 +1033,7 @@ func (c *IPAMContext) nodeIPPoolReconcile(interval time.Duration) {
 
 		// Add new ENI
 		log.Debugf("Reconcile and add a new ENI %s", attachedENI)
-		err = c.setupENI(attachedENI.ENIID, attachedENI)
+		err = c.setupENI(attachedENI.ENIID, attachedENI, trunkENI)
 		if err != nil {
 			log.Errorf("IP pool reconcile: Failed to set up ENI %s network: %v", attachedENI.ENIID, err)
 			ipamdErrInc("eniReconcileAdd")
