@@ -69,7 +69,7 @@ func setup(t *testing.T) (*gomock.Controller,
 }
 
 func TestInitWithEC2metadata(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 	defer cancel()
 	ctrl, mockMetadata, _ := setup(t)
 	defer ctrl.Finish()
@@ -103,14 +103,14 @@ func TestInitWithEC2metadata(t *testing.T) {
 	assert.Equal(t, localIP, ins.localIPv4)
 	assert.Equal(t, ins.instanceID, instanceID)
 	assert.Equal(t, ins.primaryENImac, primaryMAC)
-	assert.Equal(t, len(ins.securityGroups.data), 2)
+	assert.Equal(t, len(ins.securityGroups.SortedList()), 2)
 	assert.Equal(t, subnetID, ins.subnetID)
 	assert.Equal(t, vpcCIDR, ins.vpcIPv4CIDR)
-	assert.Equal(t, len(ins.vpcIPv4CIDRs.data), 2)
+	assert.Equal(t, len(ins.vpcIPv4CIDRs.SortedList()), 2)
 }
 
 func TestInitWithEC2metadataVPCcidrErr(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
 	ctrl, mockMetadata, _ := setup(t)
 	defer ctrl.Finish()
@@ -133,7 +133,7 @@ func TestInitWithEC2metadataVPCcidrErr(t *testing.T) {
 }
 
 func TestInitWithEC2metadataSubnetErr(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
 	ctrl, mockMetadata, _ := setup(t)
 	defer ctrl.Finish()
@@ -155,7 +155,7 @@ func TestInitWithEC2metadataSubnetErr(t *testing.T) {
 }
 
 func TestInitWithEC2metadataSGErr(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
 	ctrl, mockMetadata, _ := setup(t)
 	defer ctrl.Finish()
@@ -179,7 +179,7 @@ func TestInitWithEC2metadataSGErr(t *testing.T) {
 }
 
 func TestInitWithEC2metadataENIErrs(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
 	ctrl, mockMetadata, _ := setup(t)
 	defer ctrl.Finish()
@@ -197,7 +197,7 @@ func TestInitWithEC2metadataENIErrs(t *testing.T) {
 }
 
 func TestInitWithEC2metadataMACErr(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
 	ctrl, mockMetadata, _ := setup(t)
 	defer ctrl.Finish()
@@ -214,7 +214,7 @@ func TestInitWithEC2metadataMACErr(t *testing.T) {
 }
 
 func TestInitWithEC2metadataLocalIPErr(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
 	ctrl, mockMetadata, _ := setup(t)
 	defer ctrl.Finish()
@@ -228,7 +228,7 @@ func TestInitWithEC2metadataLocalIPErr(t *testing.T) {
 }
 
 func TestInitWithEC2metadataInstanceErr(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
 	ctrl, mockMetadata, _ := setup(t)
 	defer ctrl.Finish()
@@ -243,7 +243,7 @@ func TestInitWithEC2metadataInstanceErr(t *testing.T) {
 }
 
 func TestInitWithEC2metadataAZErr(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
 	ctrl, mockMetadata, _ := setup(t)
 	defer ctrl.Finish()
@@ -441,7 +441,7 @@ func TestDescribeAllENIs(t *testing.T) {
 }
 
 func TestTagEni(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
 	ctrl, mockMetadata, mockEC2 := setup(t)
 	defer ctrl.Finish()

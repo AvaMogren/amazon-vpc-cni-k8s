@@ -47,8 +47,6 @@ const (
 	eniAttachTime               = 10 * time.Second
 	nodeIPPoolReconcileInterval = 60 * time.Second
 	decreaseIPPoolInterval      = 30 * time.Second
-	maxK8SRetries               = 5
-	retryK8SInterval            = 3 * time.Second
 
 	// ipReconcileCooldown is the amount of time that an IP address must wait until it can be added to the data store
 	// during reconciliation after being discovered on the EC2 instance metadata.
@@ -344,7 +342,7 @@ func (c *IPAMContext) nodeInit() error {
 	vpcCIDRs := c.awsClient.GetVPCIPv4CIDRs()
 
 	for _, cidr := range vpcCIDRs {
-		pbVPCcidrs = append(pbVPCcidrs, *cidr)
+		pbVPCcidrs = append(pbVPCcidrs, cidr)
 	}
 
 	_, vpcCIDR, err := net.ParseCIDR(c.awsClient.GetVPCIPv4CIDR())
@@ -411,7 +409,7 @@ func (c *IPAMContext) nodeInit() error {
 	}
 
 	//Spawning updateCIDRsRulesOnChange go-routine
-	go wait.Forever(func() { pbVPCcidrs = c.updateCIDRsRulesOnChange(pbVPCcidrs)}, 30*time.Second)
+	go wait.Forever(func() { pbVPCcidrs = c.updateCIDRsRulesOnChange(pbVPCcidrs) }, 30*time.Second)
 	return nil
 }
 
@@ -440,7 +438,7 @@ func (c *IPAMContext) updateCIDRsRulesOnChange(oldVPCCidrs []string) []string {
 	var pbVPCCIDRs []string
 	newVPCCIDRs := c.awsClient.GetVPCIPv4CIDRs()
 	for _, cidr := range newVPCCIDRs {
-		pbVPCCIDRs = append(pbVPCCIDRs, *cidr)
+		pbVPCCIDRs = append(pbVPCCIDRs, cidr)
 	}
 
 	if len(oldVPCCidrs) != len(pbVPCCIDRs) || !reflect.DeepEqual(oldVPCCidrs, pbVPCCIDRs) {

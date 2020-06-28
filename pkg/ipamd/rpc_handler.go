@@ -55,8 +55,8 @@ func (s *server) AddNetwork(ctx context.Context, in *rpc.AddNetworkRequest) (*rp
 
 	var pbVPCcidrs []string
 	for _, cidr := range s.ipamContext.awsClient.GetVPCIPv4CIDRs() {
-		log.Debugf("VPC CIDR %s", *cidr)
-		pbVPCcidrs = append(pbVPCcidrs, *cidr)
+		log.Debugf("VPC CIDR %s", cidr)
+		pbVPCcidrs = append(pbVPCcidrs, cidr)
 	}
 
 	useExternalSNAT := s.ipamContext.networkClient.UseExternalSNAT()
