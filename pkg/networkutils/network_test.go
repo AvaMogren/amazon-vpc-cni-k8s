@@ -132,14 +132,6 @@ func TestSetupENINetworkMACFail(t *testing.T) {
 	assert.Errorf(t, err, "simulated failure")
 }
 
-func TestSetupENINetworkPrimary(t *testing.T) {
-	ctrl, mockNetLink, _, _, _, _ := setup(t)
-	defer ctrl.Finish()
-
-	err := setupENINetwork(testeniIP, testMAC2, 0, testeniSubnet, mockNetLink, 0*time.Second, 0*time.Second, testMTU)
-	assert.NoError(t, err)
-}
-
 func TestSetupHostNetworkNodePortDisabled(t *testing.T) {
 	ctrl, mockNetLink, _, mockNS, mockIptables, _ := setup(t)
 	defer ctrl.Finish()

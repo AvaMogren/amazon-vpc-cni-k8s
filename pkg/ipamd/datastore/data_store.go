@@ -122,7 +122,7 @@ type ENI struct {
 	createTime time.Time
 	// IsPrimary indicates whether ENI is a primary ENI
 	IsPrimary bool
-	// DeviceNumber is the device number of ENI (0 means the primary ENI)
+	// DeviceNumber is the device number of the ENI
 	DeviceNumber int
 	// IPv4Addresses shows whether each address is assigned, the key is IP address, which must
 	// be in dot-decimal notation with no leading zeros and no whitespace(eg: "10.1.0.253")
@@ -440,7 +440,7 @@ func (ds *DataStore) DelIPv4AddressFromStore(eniID string, ipv4 string, force bo
 
 // AssignPodIPv4Address assigns an IPv4 address to pod
 // It returns the assigned IPv4 address, device number, error
-func (ds *DataStore) AssignPodIPv4Address(ipamKey IPAMKey) (string, int, error) {
+func (ds *DataStore) AssignPodIPv4Address(ipamKey IPAMKey) (ipv4address string, deviceNumber int, err error) {
 	ds.lock.Lock()
 	defer ds.lock.Unlock()
 
@@ -458,7 +458,7 @@ func (ds *DataStore) AssignPodIPv4Address(ipamKey IPAMKey) (string, int, error) 
 					ds.log.Warnf("Failed to update backing store: %v", err)
 					// Important! Unwind assignment
 					ds.unassignPodIPv4AddressUnsafe(eni, addr)
-					return "", 0, err
+					return "", -1, err
 				}
 
 				return addr.Address, eni.DeviceNumber, nil
@@ -467,7 +467,7 @@ func (ds *DataStore) AssignPodIPv4Address(ipamKey IPAMKey) (string, int, error) 
 		ds.log.Debugf("AssignPodIPv4Address: ENI %s does not have available addresses", eni.ID)
 	}
 	ds.log.Errorf("DataStore has no available IP addresses")
-	return "", 0, errors.New("assignPodIPv4AddressUnsafe: no available IP addresses")
+	return "", -1, errors.New("assignPodIPv4AddressUnsafe: no available IP addresses")
 }
 
 // It returns the assigned IPv4 address, device number

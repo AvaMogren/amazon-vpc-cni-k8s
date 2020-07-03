@@ -114,8 +114,8 @@ var log = logger.Get()
 type NetworkAPIs interface {
 	// SetupNodeNetwork performs node level network configuration
 	SetupHostNetwork(vpcCIDRs []string, primaryMAC string, primaryAddr *net.IP) error
-	// SetupENINetwork performs eni level network configuration
-	SetupENINetwork(eniIP string, mac string, table int, subnetCIDR string) error
+	// SetupENINetwork performs ENI level network configuration. Not needed on the primary ENI
+	SetupENINetwork(eniIP string, mac string, deviceNumber int, subnetCIDR string) error
 	UseExternalSNAT() bool
 	GetExcludeSNATCIDRs() []string
 	GetRuleList() ([]netlink.Rule, error)
@@ -637,21 +637,16 @@ func LinkByMac(mac string, netLink netlinkwrapper.NetLink, retryInterval time.Du
 	}
 }
 
-// SetupENINetwork adds default route to route table (eni-<eni_table>)
-func (n *linuxNetwork) SetupENINetwork(eniIP string, eniMAC string, eniTable int, eniSubnetCIDR string) error {
-	return setupENINetwork(eniIP, eniMAC, eniTable, eniSubnetCIDR, n.netLink, retryLinkByMacInterval, retryRouteAddInterval, n.mtu)
+// SetupENINetwork adds default route to route table (eni-<eni_table>), so it does not need to be called on the primary ENI
+func (n *linuxNetwork) SetupENINetwork(eniIP string, eniMAC string, deviceNumber int, eniSubnetCIDR string) error {
+	return setupENINetwork(eniIP, eniMAC, deviceNumber, eniSubnetCIDR, n.netLink, retryLinkByMacInterval, retryRouteAddInterval, n.mtu)
 }
 
-func setupENINetwork(eniIP string, eniMAC string, eniTable int, eniSubnetCIDR string, netLink netlinkwrapper.NetLink,
+func setupENINetwork(eniIP string, eniMAC string, deviceNumber int, eniSubnetCIDR string, netLink netlinkwrapper.NetLink,
 	retryLinkByMacInterval time.Duration, retryRouteAddInterval time.Duration, mtu int) error {
 
-	if eniTable == 0 {
-		log.Debugf("Skipping set up ENI network for primary interface")
-		return nil
-	}
-
 	log.Infof("Setting up network for an ENI with IP address %s, MAC address %s, CIDR %s and route table %d",
-		eniIP, eniMAC, eniSubnetCIDR, eniTable)
+		eniIP, eniMAC, eniSubnetCIDR, deviceNumber)
 	link, err := LinkByMac(eniMAC, netLink, retryLinkByMacInterval)
 	if err != nil {
 		return errors.Wrapf(err, "setupENINetwork: failed to find the link which uses MAC address %s", eniMAC)
@@ -664,8 +659,6 @@ func setupENINetwork(eniIP string, eniMAC string, eniTable int, eniSubnetCIDR st
 	if err = netLink.LinkSetUp(link); err != nil {
 		return errors.Wrapf(err, "setupENINetwork: failed to bring up ENI %s", eniIP)
 	}
-
-	deviceNumber := link.Attrs().Index
 
 	_, ipnet, err := net.ParseCIDR(eniSubnetCIDR)
 	if err != nil {
@@ -703,22 +696,23 @@ func setupENINetwork(eniIP string, eniMAC string, eniTable int, eniSubnetCIDR st
 		return errors.Wrap(err, "setupENINetwork: failed to add IP addr to ENI")
 	}
 
-	log.Debugf("Setting up ENI's default gateway %v", gw)
+	linkIndex := link.Attrs().Index
+	log.Debugf("Setting up ENI's default gateway %v, table %d, linkIndex %d", gw, deviceNumber, linkIndex)
 	routes := []netlink.Route{
 		// Add a direct link route for the host's ENI IP only
 		{
-			LinkIndex: deviceNumber,
+			LinkIndex: linkIndex,
 			Dst:       &net.IPNet{IP: gw, Mask: net.CIDRMask(32, 32)},
 			Scope:     netlink.SCOPE_LINK,
-			Table:     eniTable,
+			Table:     deviceNumber,
 		},
 		// Route all other traffic via the host's ENI IP
 		{
-			LinkIndex: deviceNumber,
+			LinkIndex: linkIndex,
 			Dst:       &net.IPNet{IP: net.IPv4zero, Mask: net.CIDRMask(0, 32)},
 			Scope:     netlink.SCOPE_UNIVERSE,
 			Gw:        gw,
-			Table:     eniTable,
+			Table:     deviceNumber,
 		},
 	}
 	for _, r := range routes {
@@ -730,7 +724,7 @@ func setupENINetwork(eniIP string, eniMAC string, eniTable int, eniSubnetCIDR st
 		err = retry.RetryNWithBackoff(retry.NewSimpleBackoff(500*time.Millisecond, retryRouteAddInterval, 0.15, 2.0), maxRetryRouteAdd, func() error {
 			if err := netLink.RouteReplace(&r); err != nil {
 				log.Debugf("Not able to set route %s/0 via %s table %d",
-					r.Dst.IP.String(), gw.String(), eniTable)
+					r.Dst.IP.String(), gw.String(), deviceNumber)
 				return errors.Wrapf(err, "setupENINetwork: unable to replace route entry %s", r.Dst.IP.String())
 			}
 
