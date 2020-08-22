@@ -208,6 +208,7 @@ type InstanceTypeLimits struct {
 	IPv4Limit int
 }
 
+// PrimaryIPv4Address returns the primary IP of this node
 func (eni ENIMetadata) PrimaryIPv4Address() string {
 	for _, addr := range eni.IPv4Addresses {
 		if aws.BoolValue(addr.Primary) {
@@ -217,6 +218,7 @@ func (eni ENIMetadata) PrimaryIPv4Address() string {
 	return ""
 }
 
+// TagMap keeps track of the EC2 tags on each ENI
 type TagMap map[string]string
 
 // msSince returns milliseconds since start.
@@ -239,6 +241,7 @@ type StringSet struct {
 	data sets.String
 }
 
+// SortedList returnsa sorted string slice from this set
 func (ss *StringSet) SortedList() []string {
 	ss.RLock()
 	defer ss.RUnlock()
@@ -246,12 +249,14 @@ func (ss *StringSet) SortedList() []string {
 	return ss.data.List()
 }
 
+// Set sets the string set
 func (ss *StringSet) Set(items []string) {
 	ss.Lock()
 	defer ss.Unlock()
 	ss.data = sets.NewString(items...)
 }
 
+// Difference compares this StringSet with another
 func (ss *StringSet) Difference(other *StringSet) *StringSet {
 	ss.RLock()
 	other.RLock()
@@ -261,6 +266,7 @@ func (ss *StringSet) Difference(other *StringSet) *StringSet {
 	return &StringSet{data: ss.data.Difference(other.data)}
 }
 
+// Has returns true if the StringSet contains the string
 func (ss *StringSet) Has(item string) bool {
 	ss.RLock()
 	defer ss.RUnlock()
